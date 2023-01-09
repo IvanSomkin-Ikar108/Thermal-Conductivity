@@ -10,7 +10,8 @@ from PIL import Image, ImageDraw, ImageFont
 
 
 def get_coef(l, m):
-    matrix = np.array([[pow(-l + j, i) for j in range(m + l + 1)]
+    matrix = np.array([[pow(-l + j, i)
+                        for j in range(m + l + 1)]
                        for i in range(m + l + 1)])
     a = np.zeros(m + l + 1)
     a[1] = 1
@@ -74,11 +75,12 @@ class ThermalConductivitySimulation:
         self.net_width = None
         self.output_directory = None
         self.areas: [Area] = []
+        self.system: [Area] = []
         self.img_height = None
         self.img_width = None
         self.transition_matrix = None
         self.period = 2. * np.pi
-        self.h = 1.
+        self.h = 3
         self.l_m = (3, 0)
         self.time = 0.
         self.time_step = 0.01
@@ -114,17 +116,17 @@ class ThermalConductivitySimulation:
     def set_output_directory(self, output_directory):
         self.output_directory = output_directory
 
-    def termal_step_rate(self, a: Area):
-        if len(a.neighbors) < 4:
-            return 1 + np.cos(self.period * self.time)
-        return 0
+    # def termal_step_rate(self, a: Area):
+    #     if len(a.neighbors) < 4:
+    #         return np.cos(self.period * self.time) + 1
+    #     return 0
 
     def step(self):
         main_coef = get_coef(*(self.l_m))
-        left_hand = [-sum([a.temperature_history[i+1] * main_coef[i]
-                          for i in range(len(main_coef) - 1)]) +
-                     self.time_step * self.termal_step_rate(a)
-                     for a in self.areas]
+        left_hand = np.array([-sum([a.temperature_history[i+1] * main_coef[i]
+                              for i in range(len(main_coef) - 1)]) if len(a.neighbors) == 4
+                              else (1 + np.cos(self.period * self.time))
+                              for a in self.areas])
 
         new_temp = np.linalg.solve(self.transition_matrix, left_hand)
         for a in self.areas:
@@ -152,13 +154,15 @@ class ThermalConductivitySimulation:
         main_coef = get_coef(*(self.l_m))[-1]
         def_coef = 2. * self.time_step / pow(self.h, 2)
         for area in self.areas:
-            matrix[area.id][area.id] = main_coef + \
-                                       len(area.neighbors) * (area.x + area.y) * def_coef / 2
-            for neighbour in area.neighbors:
-                if area.net_pos[0] == neighbour.net_pos[0]:
-                    matrix[area.id][neighbour.id] = - area.x * def_coef
-                else:
-                    matrix[area.id][neighbour.id] = - area.y * def_coef
+            if len(area.neighbors) == 4:
+                matrix[area.id][area.id] = main_coef - 2 * (area.x + area.y) * def_coef
+                for neighbour in area.neighbors:
+                    if area.net_pos[0] == neighbour.net_pos[0]:
+                        matrix[area.id][neighbour.id] = - area.x * def_coef
+                    else:
+                        matrix[area.id][neighbour.id] = - area.y * def_coef
+            else:
+                matrix[area.id][area.id] = 1
             # for neighbour_2 in area.neighbors_2:
             #     matrix[area.id][neighbour_2.id] =\
             #         -1. * migration_rate *
@@ -166,8 +170,8 @@ class ThermalConductivitySimulation:
 
     def render_step(self, img_path: str):
 
-        heatmap = np.ones((self.net_width, self.net_height))
-        heatmap[0][0] *= 10
+        heatmap = np.zeros((self.net_width, self.net_height))
+        heatmap[0][0] = 2
         for a in self.areas:
             heatmap[a.net_pos[1], a.net_pos[0]] = a.temperature_history[-1]
 
@@ -212,8 +216,8 @@ def main():
     simulation.initialize_areas_with_image('./assets/brazil.png')
     simulation.set_output_directory('result')
 
-    simulation.run(steps=1000, time_step=0.01,
-                   render=True, render_step_period=100)
+    simulation.run(steps=100, time_step=0.01,
+                   render=True, render_step_period=10)
 
 
 if __name__ == '__main__':
