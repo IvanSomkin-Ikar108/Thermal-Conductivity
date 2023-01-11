@@ -63,9 +63,49 @@ class Area:
             (net_x + 1, net_y)
         ]
 
+    def currentTemperature(self):
+        return self.temperature_history[-1]
+
+
+class ThermalConductivityRunResult:
+    def __init__(self, area: Area):
+        self.area = area
+        self.temperature = []
+        self.t = []
+        self.plt = None
+        self.fig_num = None
+
+    def add_figure(self, fig_num: int, temperature_label: str = "Температура"):
+        self.fig_num = fig_num
+        t = self.t
+        temperature = self.temperature
+        area_id = self.area.id
+        net_x = self.area.net_pos[0]
+        net_y = self.area.net_pos[1]
+
+        fig, ax = plt.subplots(nrows=1, ncols=1)
+        ax.plot(t, temperature, label=temperature_label)
+        plt.xticks(np.arange(0, max(t), max(t) / 20), rotation=90, fontsize=10)
+        ax.grid(True)
+        ax.legend()
+        plt.title(
+            f'Area {area_id} - ({net_x}, {net_y})',
+            fontsize=10
+        )
+        plt.xlabel('Время', fontsize=14)
+        plt.ylabel('Температура', fontsize=14)
+
+    def add_plot(self, p: plt, fig_num: int, temperature_label: str):
+        t = self.t
+
+        p.figure(fig_num)
+        p.plot(t, self.temperature, label=temperature_label)
+        p.legend()
+
 
 class ThermalConductivitySimulation:
     def __init__(self):
+        self.run_result = None
         self.render_step_period = None
         self.render = None
         self.steps = None
@@ -120,9 +160,9 @@ class ThermalConductivitySimulation:
         return 0
 
     def step(self):
-        main_coef = get_coef(*(self.l_m))
-        left_hand = [-sum([a.temperature_history[i+1] * main_coef[i]
-                          for i in range(len(main_coef) - 1)]) +
+        main_coef = get_coef(*self.l_m)
+        left_hand = [-sum([a.temperature_history[i + 1] * main_coef[i]
+                           for i in range(len(main_coef) - 1)]) +
                      self.time_step * self.termal_step_rate(a)
                      for a in self.areas]
 
@@ -133,23 +173,23 @@ class ThermalConductivitySimulation:
         print(self.areas[4].temperature_history[-1])
 
     def add_run_result(self, a: Area):
-        pass
-        # self.run_result[a.id].predator.append(a.predator)
-        # self.run_result[a.id].prey.append(a.prey)
-        # self.run_result[a.id].t.append(t)
+        self.run_result[a.id].temperature.append(a.currentTemperature())
+        self.run_result[a.id].t.append(self.time)
+
+    def get_run_result(self, area_id: int):
+        return self.run_result[area_id]
 
     def initialize_run_result(self):
         self.run_result = dict()
         for i in range(len(self.areas)):
             a = self.areas[i]
             a.id = i
-            # self.run_result[i] = PredatorPreyRunResult(
-            #     a, time_precision, data_precision)
+            self.run_result[i] = ThermalConductivityRunResult(a)
 
     def initialize_transition_matrix(self):
         matrix = np.zeros((len(self.areas), len(self.areas)),
                           int).astype('float')
-        main_coef = get_coef(*(self.l_m))[-1]
+        main_coef = get_coef(*self.l_m)[-1]
         def_coef = 2. * self.time_step / pow(self.h, 2)
         for area in self.areas:
             matrix[area.id][area.id] = main_coef + \
@@ -173,7 +213,10 @@ class ThermalConductivitySimulation:
 
         fig, ax = plt.subplots(nrows=1, ncols=1)
         ax.imshow(heatmap, cmap='hot', interpolation='nearest')
+        plt.xticks(np.arange(0, 1, self.net_width), rotation=90, fontsize=10)
+        plt.yticks(np.arange(0, 1, self.net_height), rotation=90, fontsize=10)
         fig.savefig(img_path)
+        plt.close(fig)
 
     def run(self, steps: int, time_step: float, render: bool, render_step_period: int):
 
@@ -214,6 +257,13 @@ def main():
 
     simulation.run(steps=1000, time_step=0.01,
                    render=True, render_step_period=100)
+
+    plt.figure(0).clf()
+    simulation.get_run_result(30).add_figure(plt, 0)  # 2 neighbours
+    simulation.get_run_result(8).add_figure(plt, 1)  # 4 neighbours
+    simulation.get_run_result(32).add_figure(plt, 2)
+
+    plt.show()
 
 
 if __name__ == '__main__':
