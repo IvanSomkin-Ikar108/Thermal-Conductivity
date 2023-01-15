@@ -30,8 +30,8 @@ class Area:
         self.id = None
         self.net_pos = net_pos
         self.img_pos = img_pos
-        self.x = 0.5
-        self.y = 0.5
+        self.x = 1.
+        self.y = 1.
         self.temperature_history = [1., 1., 1., 1.]
 
     def initialize_neighbors(self, areas: []):
@@ -80,7 +80,7 @@ class ThermalConductivitySimulation:
         self.img_width = None
         self.transition_matrix = None
         self.period = 2. * np.pi
-        self.h = 3
+        self.h = 1
         self.l_m = (3, 0)
         self.time = 0.
         self.time_step = 0.01
@@ -155,7 +155,7 @@ class ThermalConductivitySimulation:
         def_coef = 2. * self.time_step / pow(self.h, 2)
         for area in self.areas:
             if len(area.neighbors) == 4:
-                matrix[area.id][area.id] = main_coef - 2 * (area.x + area.y) * def_coef
+                matrix[area.id][area.id] = main_coef + 2 * (area.x + area.y) * def_coef
                 for neighbour in area.neighbors:
                     if area.net_pos[0] == neighbour.net_pos[0]:
                         matrix[area.id][neighbour.id] = - area.x * def_coef
@@ -163,18 +163,14 @@ class ThermalConductivitySimulation:
                         matrix[area.id][neighbour.id] = - area.y * def_coef
             else:
                 matrix[area.id][area.id] = 1
-            # for neighbour_2 in area.neighbors_2:
-            #     matrix[area.id][neighbour_2.id] =\
-            #         -1. * migration_rate *
         self.transition_matrix = matrix
 
     def render_step(self, img_path: str):
 
-        heatmap = np.zeros((self.net_width, self.net_height))
-        heatmap[0][0] = 2
+        heatmap = np.zeros((self.net_width, self.net_height + 1))
         for a in self.areas:
             heatmap[a.net_pos[1], a.net_pos[0]] = a.temperature_history[-1]
-
+        heatmap[:, -1] = [2. - 2. * a / self.net_width for a in range(self.net_width)]
         fig, ax = plt.subplots(nrows=1, ncols=1)
         ax.imshow(heatmap, cmap='hot', interpolation='nearest')
         fig.savefig(img_path)
@@ -216,7 +212,7 @@ def main():
     simulation.initialize_areas_with_image('./assets/brazil.png')
     simulation.set_output_directory('result')
 
-    simulation.run(steps=100, time_step=0.01,
+    simulation.run(steps=250, time_step=0.01,
                    render=True, render_step_period=10)
 
 
