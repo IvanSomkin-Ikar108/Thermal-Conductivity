@@ -64,12 +64,52 @@ class Area:
             (net_x + 1, net_y)
         ]
 
+    def current_temperature(self):
+        return self.temperature_history[-1]
+
+
+class ThermalConductivityRunResult:
+    def __init__(self, area: Area):
+        self.area = area
+        self.temperature = []
+        self.t = []
+        self.plt = None
+        self.fig_num = None
+
+    def add_figure(self, fig_num: int, temperature_label: str = "Температура"):
+        self.fig_num = fig_num
+        t = self.t
+        temperature = self.temperature
+        area_id = self.area.id
+        net_x = self.area.net_pos[0]
+        net_y = self.area.net_pos[1]
+
+        fig, ax = plt.subplots(nrows=1, ncols=1)
+        ax.plot(t, temperature, label=temperature_label)
+        plt.xticks(np.arange(0, max(t), max(t) / 20), rotation=90, fontsize=10)
+        ax.grid(True)
+        ax.legend()
+        plt.title(
+            f'Area {area_id} - ({net_x}, {net_y})',
+            fontsize=10
+        )
+        plt.xlabel('Время', fontsize=14)
+        plt.ylabel('Температура', fontsize=14)
+
+    def add_plot(self, p: plt, fig_num: int, temperature_label: str):
+        t = self.t
+
+        p.figure(fig_num)
+        p.plot(t, self.temperature, label=temperature_label)
+        p.legend()
+
 
 class ThermalConductivitySimulation:
     def __init__(self):
         self.render_step_period = None
         self.render = None
         self.steps = None
+        self.run_result = None
 
         self.net_height = None
         self.net_width = None
@@ -116,11 +156,6 @@ class ThermalConductivitySimulation:
     def set_output_directory(self, output_directory):
         self.output_directory = output_directory
 
-    # def termal_step_rate(self, a: Area):
-    #     if len(a.neighbors) < 4:
-    #         return np.cos(self.period * self.time) + 1
-    #     return 0
-
     def step(self):
         main_coef = get_coef(*(self.l_m))
         left_hand = np.array([-sum([a.temperature_history[i+1] * main_coef[i]
@@ -132,21 +167,20 @@ class ThermalConductivitySimulation:
         for a in self.areas:
             a.temperature_history.pop(0)
             a.temperature_history.append(new_temp[a.id])
-        print(self.areas[4].temperature_history[-1])
 
     def add_run_result(self, a: Area):
-        pass
-        # self.run_result[a.id].predator.append(a.predator)
-        # self.run_result[a.id].prey.append(a.prey)
-        # self.run_result[a.id].t.append(t)
+        self.run_result[a.id].temperature.append(a.current_temperature())
+        self.run_result[a.id].t.append(self.time)
+
+    def get_run_result(self, area_id: int):
+        return self.run_result[area_id]
 
     def initialize_run_result(self):
         self.run_result = dict()
         for i in range(len(self.areas)):
             a = self.areas[i]
             a.id = i
-            # self.run_result[i] = PredatorPreyRunResult(
-            #     a, time_precision, data_precision)
+            self.run_result[i] = ThermalConductivityRunResult(a)
 
     def initialize_transition_matrix(self):
         matrix = np.zeros((len(self.areas), len(self.areas)),
@@ -173,7 +207,10 @@ class ThermalConductivitySimulation:
         heatmap[:, -1] = [2. - 2. * a / self.net_width for a in range(self.net_width)]
         fig, ax = plt.subplots(nrows=1, ncols=1)
         ax.imshow(heatmap, cmap='hot', interpolation='nearest')
+        plt.xticks(np.arange(0, 1, self.net_width), rotation=90, fontsize=10)
+        plt.yticks(np.arange(0, 1, self.net_height), rotation=90, fontsize=10)
         fig.savefig(img_path)
+        plt.close(fig)
 
     def run(self, steps: int, time_step: float, render: bool, render_step_period: int):
 
@@ -213,7 +250,15 @@ def main():
     simulation.set_output_directory('result')
 
     simulation.run(steps=250, time_step=0.01,
-                   render=True, render_step_period=10)
+                   render=False, render_step_period=10)
+
+    #plt.figure(0).clf()
+    simulation.get_run_result(0).add_figure(plt, "0")
+    for area_number in range(1, len(simulation.areas), 10):
+        simulation.get_run_result(area_number).add_plot(plt, 1, f'{area_number}')  # 4 neighbours
+    #simulation.get_run_result(32).add_plot(plt, 1, "Point 32")
+
+    plt.show()
 
 
 if __name__ == '__main__':
